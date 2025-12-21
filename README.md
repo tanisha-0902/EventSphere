@@ -10,7 +10,7 @@
 
 ## ✨ Overview
 
-EventSphere is a full-stack web application designed to simplify event discovery, registration, and management. Built with Node.js, Express, EJS, and MongoDB Atlas, it offers an intuitive platform where users can explore events, register online, and receive real-time updates.
+EventSphere is a robust full-stack web application developed to streamline event discovery, registration, and end-to-end event management. Built using Node.js, Express, EJS, and MongoDB Atlas, the platform provides a clean and intuitive user interface that allows users to easily browse upcoming events, register online, and stay informed through real-time updates.
 
 The system features secure JWT and session-based authentication, Redis-backed caching, and WebSocket-powered live notifications for a seamless interactive experience.
 
