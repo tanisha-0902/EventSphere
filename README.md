@@ -14,7 +14,7 @@ EventSphere is a robust full-stack web application developed to streamline event
 
 The system incorporates secure authentication mechanisms using JWT and session-based login, ensuring protected access for both users and organizers. To enhance performance and scalability, Redis-backed caching is implemented, reducing database load and improving response times. Additionally, WebSocket-powered live notifications enable instant updates for event changes, confirmations, and announcements, creating a seamless and interactive user experience.
 
-Organizers can efficiently create, update, and manage events, while HTTPS support via SSL certificates ensures safe and encrypted communication throughout the platform.
+Event organizers are empowered with comprehensive tools to create, update, and manage events efficiently, track registrations, and maintain accurate event details. The application also supports HTTPS communication secured with SSL certificates, guaranteeing encrypted data transfer and maintaining high standards of security across the platform.
 
 ---
 
