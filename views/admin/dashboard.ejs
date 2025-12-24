@@ -240,7 +240,7 @@
                                                      class="img-fluid rounded" 
                                                      style="height: 60px; width: 80px; object-fit: cover;">
                                             </div>
-                                            <div class="col-md-5">
+                                            <div class="col-md-4">
                                                 <h5 class="mb-1"><%= event.title %></h5>
                                                 <p class="text-muted mb-1 small"><%= event.description.substring(0, 100) %>...</p>
                                                 <small class="text-primary">
@@ -255,6 +255,14 @@
                                                     <%= new Date(event.date) >= new Date() ? 'Upcoming' : 'Past' %>
                                                 </span>
                                             </div>
+                                                <div class="col-md-2 text-center">
+                                                    <small class="text-muted">Registrations</small>
+                                                    <div>
+                                                            <span class="badge bg-primary">
+                                                                <%= (registrationCounts && registrationCounts[(event._id && event._id.toString())]) || 0 %>
+                                                            </span>
+                                                    </div>
+                                                </div>
                                             <div class="col-md-3">
                                                 <div class="action-buttons">
                                                     <button type="button" class="btn btn-outline-primary btn-sm" 

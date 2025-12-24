@@ -124,6 +124,134 @@
         section+section {
             margin-top: 3rem;
         }
+
+        /* User Auth Status Bar - Enhanced Styling */
+        .auth-status-bar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1.5rem 0;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .auth-status-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, 
+                rgba(255,255,255,0.05) 0%, 
+                rgba(255,255,255,0.02) 50%, 
+                rgba(255,255,255,0.05) 100%);
+            pointer-events: none;
+        }
+
+        .auth-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .auth-status-text {
+            color: white;
+            font-weight: 500;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .auth-status-text .user-icon {
+            width: 36px;
+            height: 36px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .auth-status-text .user-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: #fff;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .auth-btn {
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .auth-btn-login {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 1.5px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .auth-btn-login:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .auth-btn-register {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            color: white;
+        }
+
+        .auth-btn-register:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        .auth-btn-logout {
+            background: rgba(255, 87, 108, 0.2);
+            color: #ff5764;
+            border: 1.5px solid rgba(255, 87, 108, 0.4);
+        }
+
+        .auth-btn-logout:hover {
+            background: rgba(255, 87, 108, 0.3);
+            border-color: rgba(255, 87, 108, 0.6);
+            transform: translateY(-2px);
+            color: #ff5764;
+        }
+
+        @media (max-width: 768px) {
+            .auth-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .auth-buttons {
+                width: 100%;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 
@@ -132,6 +260,48 @@
 
         <main>
             <%- include('partials/flash-messages') %>
+
+                <!-- User Auth Status Bar - Enhanced -->
+                <section class="auth-status-bar">
+                    <div class="container">
+                        <div class="auth-content">
+                            <div class="auth-status-text">
+                                <% if (session && session.userId) { %>
+                                    <div class="user-icon">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <div>
+                                        Welcome back, <span class="user-name"><%= session.userName %></span>
+                                    </div>
+                                <% } else { %>
+                                    <div class="user-icon">
+                                        <i class="fas fa-lock-open"></i>
+                                    </div>
+                                    <div>
+                                        Sign in to register for events
+                                    </div>
+                                <% } %>
+                            </div>
+                            <div class="auth-buttons">
+                                <% if (session && session.userId) { %>
+                                    <a href="/user/logout" class="auth-btn auth-btn-logout">
+                                        <i class="fas fa-sign-out-alt"></i>
+                                        <span>Logout</span>
+                                    </a>
+                                <% } else { %>
+                                    <a href="/user/login" class="auth-btn auth-btn-login">
+                                        <i class="fas fa-sign-in-alt"></i>
+                                        <span>Login</span>
+                                    </a>
+                                    <a href="/user/register" class="auth-btn auth-btn-register">
+                                        <i class="fas fa-user-plus"></i>
+                                        <span>Register</span>
+                                    </a>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+                </section>
 
                 <!-- Hero / Page Header -->
                 <section class="page-header fade-in show" style="
@@ -182,11 +352,18 @@
                                                 <small class="text-muted">
                                                     <%= new Date(event.date)> new Date() ? 'Upcoming' : 'Past Event' %>
                                                 </small>
-                                                <!-- FIXED: Properly accessing the _id field -->
-                                                <a href="/events/<%= event._id.toString() %>"
-                                                    class="btn btn-primary btn-sm">
-                                                    <i class="fas fa-info-circle me-1"></i>Details
-                                                </a>
+                                                <div class="d-flex gap-2">
+                                                    <a href="/events/<%= event._id.toString() %>" class="btn btn-primary btn-sm">
+                                                        <i class="fas fa-info-circle me-1"></i>Details
+                                                    </a>
+
+                                                    <!-- User registration button -->
+                                                    <button class="btn btn-outline-success btn-sm register-btn"
+                                                            data-event-id="<%= event._id.toString() %>"
+                                                            data-event-date="<%= event.date %>">
+                                                        Register
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -252,6 +429,86 @@
                     console.log('Event link:', btn.href);
                 });
             </script>
+            <script>
+                // Registered events passed from server
+                const registeredEventIds = <%- JSON.stringify(registeredEventIds || []) %>;
+
+                function updateRegisterButtonState(btn, isRegistered) {
+                    if (!btn) return;
+                    if (isRegistered === 'past') {
+                        btn.textContent = 'Closed';
+                        btn.classList.remove('btn-outline-success');
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-secondary');
+                        btn.disabled = true;
+                        return;
+                    }
+
+                    if (isRegistered) {
+                        btn.textContent = 'Registered';
+                        btn.classList.remove('btn-outline-success');
+                        btn.classList.add('btn-success');
+                        btn.disabled = true;
+                    } else {
+                        btn.textContent = 'Register';
+                        btn.classList.remove('btn-success');
+                        btn.classList.remove('btn-secondary');
+                        btn.classList.add('btn-outline-success');
+                        btn.disabled = false;
+                    }
+                }
+
+                function setupRegisterButtons() {
+                    document.querySelectorAll('.register-btn').forEach(btn => {
+                        const eventId = btn.dataset.eventId;
+                        const dateStr = btn.dataset.eventDate || btn.closest('.event-item')?.dataset.date;
+                        const eventDate = dateStr ? new Date(dateStr) : null;
+                        const isPast = eventDate ? (eventDate <= new Date()) : false;
+
+                        if (isPast) {
+                            updateRegisterButtonState(btn, 'past');
+                            return;
+                        }
+
+                        updateRegisterButtonState(btn, registeredEventIds.includes(eventId));
+
+                        btn.onclick = async (e) => {
+                            e.preventDefault();
+                            if (btn.disabled) return;
+                            console.log('Register button clicked for', eventId);
+                            try {
+                                const resp = await fetch(`/events/${eventId}/register`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    credentials: 'same-origin'
+                                });
+
+                                console.log('Register response status:', resp.status);
+
+                                if (resp.status === 401) {
+                                    window.location.href = '/user/login';
+                                    return;
+                                }
+
+                                const data = await resp.json();
+                                console.log('Register response data:', data);
+
+                                if (resp.ok && data && data.success) {
+                                    if (!registeredEventIds.includes(eventId)) registeredEventIds.push(eventId);
+                                    updateRegisterButtonState(btn, true);
+                                } else {
+                                    alert(data.message || 'Could not register.');
+                                }
+                            } catch (err) {
+                                console.error('Register request failed:', err);
+                                alert('Registration failed. Try again later.');
+                            }
+                        };
+                    });
+                }
+
+                document.addEventListener('DOMContentLoaded', () => setupRegisterButtons());
+                </script>
             <script src="/socket.io/socket.io.js"></script>
             <script>
                 // Use the main server URL (adjust if needed, but 3000 is default)
@@ -282,54 +539,90 @@ function handleNewEvent(newEvent) {
     const statusText = isUpcoming ? 'Upcoming' : 'Past Event';
     const eventId = newEvent._id ? newEvent._id.toString() : 'new-event-temp';
 
-    const newEventHTML = `
-        <div class="col-lg-4 col-md-6 event-item new-event" data-date="${newEvent.date}"> 
-            <div class="card glass event-card h-100" id="event-${eventId}">
-                <img src="${newEvent.image || 'https://via.placeholder.com/300x220?text=Event+Image'}" alt="${newEvent.title}">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title mb-3">${newEvent.title}</h5>
-                    <p class="event-date">
-                        <i class="fas fa-calendar-alt me-2"></i>
-                        ${eventDateStr}
-                    </p>
-                    <p class="text-dark flex-grow-1">${newEvent.description || 'No description provided.'}</p>
-                    <div class="mt-auto d-flex justify-content-between align-items-center">
-                        <small class="text-muted">${statusText}</small>
-                        <a href="/events/${eventId}" class="btn btn-primary btn-sm">
-                           <i class="fas fa-info-circle me-1"></i>Details
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
 
-    // 1. Insert the new event card at the beginning of the grid
-    eventContainer.insertAdjacentHTML('afterbegin', newEventHTML);
+        // Build DOM nodes instead of string templates to avoid template-literal parsing issues
+        const col = document.createElement('div');
+        col.className = 'col-lg-4 col-md-6 event-item new-event';
+        col.dataset.date = newEvent.date;
 
-    // 2. Update the filterable list reference (for the filter button logic)
-    eventItems = document.querySelectorAll('.event-item');
+        const card = document.createElement('div');
+        card.className = 'card glass event-card h-100';
+        card.id = `event-${eventId}`;
 
-    // 3. Find the exact element we just inserted
-    const insertedElement = eventContainer.querySelector(`[data-date="${newEvent.date}"]`);
+        const img = document.createElement('img');
+        img.src = newEvent.image || 'https://via.placeholder.com/300x220?text=Event+Image';
+        img.alt = newEvent.title || '';
+
+        const body = document.createElement('div');
+        body.className = 'card-body d-flex flex-column';
+
+        const h5 = document.createElement('h5');
+        h5.className = 'card-title mb-3';
+        h5.textContent = newEvent.title || 'Untitled Event';
+
+        const pDate = document.createElement('p');
+        pDate.className = 'event-date';
+        pDate.innerHTML = '<i class="fas fa-calendar-alt me-2"></i>' + eventDateStr;
+
+        const pDesc = document.createElement('p');
+        pDesc.className = 'text-dark flex-grow-1';
+        pDesc.textContent = newEvent.description || 'No description provided.';
+
+        const footer = document.createElement('div');
+        footer.className = 'mt-auto d-flex justify-content-between align-items-center';
+
+        const small = document.createElement('small');
+        small.className = 'text-muted';
+        small.textContent = statusText;
+
+        const detailWrapper = document.createElement('div');
+        detailWrapper.className = 'd-flex gap-2';
+
+        const detailLink = document.createElement('a');
+        detailLink.className = 'btn btn-primary btn-sm';
+        detailLink.href = `/events/${eventId}`;
+        detailLink.innerHTML = '<i class="fas fa-info-circle me-1"></i>Details';
+
+        const regBtn = document.createElement('button');
+        regBtn.className = 'btn btn-outline-success btn-sm register-btn';
+        regBtn.dataset.eventId = eventId;
+        regBtn.dataset.eventDate = newEvent.date;
+        regBtn.textContent = 'Register';
+
+        detailWrapper.appendChild(detailLink);
+        detailWrapper.appendChild(regBtn);
+
+        footer.appendChild(small);
+        footer.appendChild(detailWrapper);
+
+        body.appendChild(h5);
+        body.appendChild(pDate);
+        body.appendChild(pDesc);
+        body.appendChild(footer);
+
+        card.appendChild(img);
+        card.appendChild(body);
+        col.appendChild(card);
+
+        // 1. Insert the new event card at the beginning of the grid
+        eventContainer.insertAdjacentElement('afterbegin', col);
+
+        // 2. Update the filterable list reference (for the filter button logic)
+        eventItems = document.querySelectorAll('.event-item');
+
+        // 3. The inserted element is 'col'
+        const insertedElement = col;
 
     if (insertedElement) {
-        // 🚨 CRITICAL FIX: Add a small delay (e.g., 50ms) to force the browser to register 
-        // the starting state (opacity: 0) defined by the 'new-event' class.
         setTimeout(() => {
-            // Now, apply the animation class. This triggers the keyframes.
             insertedElement.classList.add('fade-in-flash');
-
-            // Optionally remove the starting class (the animation will handle the transition)
             insertedElement.classList.remove('new-event');
-
-            // Remove the animation class after 1500ms (1.5s) to clean up the element
-            setTimeout(() => {
-                insertedElement.classList.remove('fade-in-flash');
-            }, 1500);
-
-        }, 50); // <-- THIS 50ms DELAY IS THE KEY FIX
+            setTimeout(() => insertedElement.classList.remove('fade-in-flash'), 1500);
+        }, 50);
     }
+
+    // Re-attach register button handlers for the newly inserted element
+    setupRegisterButtons();
 }
             </script>
 </body>

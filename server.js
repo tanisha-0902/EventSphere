@@ -309,12 +309,146 @@ async function startServer() {
           await setCachedData(cacheKey, events);
         }
 
-        res.render("events", { title: "Events - Event Sphere", events });
+        // If a user is logged in, fetch their registered event IDs
+        let registeredEventIds = [];
+        try {
+          if (req.session && req.session.userId) {
+            const regs = await db.collection('registrations')
+              .find({ userId: req.session.userId })
+              .toArray();
+            registeredEventIds = regs.map(r => r.eventId.toString());
+          }
+        } catch (e) {
+          console.warn('Could not fetch user registrations:', e.message || e);
+        }
+
+        res.render("events", { title: "Events - Event Sphere", events, registeredEventIds });
       } catch (error) {
         console.error("Error fetching events:", error);
         req.session.error = "Failed to load events";
         res.redirect("/");
       }
+    });
+
+    // Register for an event (requires user session)
+    app.post('/events/:id/register', async (req, res) => {
+      try {
+        const eventId = req.params.id;
+        console.log('POST /events/:id/register hit for', eventId, 'sessionUser:', req.session && req.session.userId);
+        if (!req.session || !req.session.userId) {
+          return res.status(401).json({ success: false, message: 'Please log in to register' });
+        }
+        if (!ObjectId.isValid(eventId)) {
+          return res.status(400).json({ success: false, message: 'Invalid event id' });
+        }
+
+        // Ensure event exists and is not in the past
+        const event = await db.collection('events').findOne({ _id: new ObjectId(eventId) });
+        if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+        const eventDate = new Date(event.date);
+        if (eventDate <= new Date()) {
+          return res.status(400).json({ success: false, message: 'Cannot register for past events' });
+        }
+
+        const regQuery = { eventId: new ObjectId(eventId), userId: req.session.userId };
+
+        // Upsert to avoid duplicate registrations
+        const result = await db.collection('registrations').updateOne(
+          regQuery,
+          { $setOnInsert: { ...regQuery, userName: req.session.userName || null, createdAt: new Date() } },
+          { upsert: true }
+        );
+
+        // Get updated count
+        const count = await db.collection('registrations').countDocuments({ eventId: new ObjectId(eventId) });
+
+        console.log('Registration result:', { upsertedCount: result.upsertedCount, modifiedCount: result.modifiedCount, count });
+
+        res.json({ success: true, registered: result.upsertedCount > 0 || result.modifiedCount > 0, count });
+      } catch (err) {
+        console.error('Register error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+      }
+    });
+
+    // User registration and login routes
+    app.get('/user/register', (req, res) => {
+      if (req.session && req.session.userId) return res.redirect('/events');
+      res.render('user/register', { title: 'Register - Event Sphere' });
+    });
+
+    app.post('/user/register', async (req, res) => {
+      try {
+        const { username, password } = req.body;
+        if (!username || !password) {
+          req.session.error = 'Username and password are required';
+          return res.redirect('/user/register');
+        }
+
+        const bcrypt = require('bcryptjs');
+        const hashed = await bcrypt.hash(password, 10);
+
+        const existing = await db.collection('users').findOne({ username });
+        if (existing) {
+          req.session.error = 'Username already taken';
+          return res.redirect('/user/register');
+        }
+
+        const insert = await db.collection('users').insertOne({ username, password: hashed, createdAt: new Date() });
+        req.session.userId = insert.insertedId.toString();
+        req.session.userName = username;
+        req.session.success = 'Registered and logged in';
+        res.redirect('/events');
+      } catch (err) {
+        console.error('User register error:', err);
+        req.session.error = 'Registration failed';
+        res.redirect('/user/register');
+      }
+    });
+
+    app.get('/user/login', (req, res) => {
+      if (req.session && req.session.userId) return res.redirect('/events');
+      res.render('user/login', { title: 'User Login - Event Sphere' });
+    });
+
+    app.post('/user/login', async (req, res) => {
+      try {
+        const { username, password } = req.body;
+        if (!username || !password) {
+          req.session.error = 'Username and password required';
+          return res.redirect('/user/login');
+        }
+
+        const user = await db.collection('users').findOne({ username });
+        if (!user) {
+          req.session.error = 'Invalid credentials';
+          return res.redirect('/user/login');
+        }
+
+        const bcrypt = require('bcryptjs');
+        const ok = await bcrypt.compare(password, user.password);
+        if (!ok) {
+          req.session.error = 'Invalid credentials';
+          return res.redirect('/user/login');
+        }
+
+        req.session.userId = user._id.toString();
+        req.session.userName = user.username;
+        req.session.success = 'Logged in successfully';
+        res.redirect('/events');
+      } catch (err) {
+        console.error('User login err:', err);
+        req.session.error = 'Login failed';
+        res.redirect('/user/login');
+      }
+    });
+
+    app.get('/user/logout', (req, res) => {
+      req.session.destroy(err => {
+        if (err) return res.redirect('/');
+        res.clearCookie('connect.sid');
+        res.redirect('/');
+      });
     });
 
     // EVENT DETAILS PAGE (Kept for completeness)
@@ -479,11 +613,26 @@ async function startServer() {
         // 🆕 Fetch all contact submissions
         const contactSubmissions = await db.collection("contacts").find().sort({ timestamp: -1 }).toArray();
 
+        // Fetch registration counts per event
+        let registrationCounts = {};
+        try {
+          const agg = await db.collection('registrations').aggregate([
+            { $group: { _id: '$eventId', count: { $sum: 1 } } }
+          ]).toArray();
+
+          agg.forEach(a => {
+            if (a._id) registrationCounts[a._id.toString()] = a.count;
+          });
+        } catch (e) {
+          console.warn('Could not compute registration counts:', e.message || e);
+        }
+
         res.render("admin/dashboard", {
           title: "Admin Dashboard - Event Sphere",
           events,
           // 🆕 Pass contactSubmissions to the template
-          contactSubmissions
+          contactSubmissions,
+          registrationCounts
         });
       } catch (error) {
         console.error("Dashboard error:", error);
@@ -687,14 +836,31 @@ async function startServer() {
     const protocolName = serverOptions ? 'https' : 'http';
     const isProduction = process.env.NODE_ENV === 'production';
 
-    httpServer.listen(PORT, '0.0.0.0', () => {
-      const baseUrl = isProduction
-        ? (process.env.BASE_URL || 'https://eventsphere-anmol.onrender.com')
-        : `${protocolName}://localhost:${PORT}`;
+    // Start server with simple EADDRINUSE fallback (tries next port once)
+    const startListen = (port) => {
+      httpServer.listen(port, '0.0.0.0', () => {
+        const baseUrl = isProduction
+          ? (process.env.BASE_URL || 'https://eventsphere-anmol.onrender.com')
+          : `${protocolName}://localhost:${port}`;
 
-      console.log(`\n🌐 Event Sphere server running at ${baseUrl}`);
-      console.log(`📍 Test session at: ${baseUrl}/test-session\n`);
-    });
+        console.log(`\n🌐 Event Sphere server running at ${baseUrl}`);
+        console.log(`📍 Test session at: ${baseUrl}/test-session\n`);
+      });
+
+      httpServer.once('error', (err) => {
+        if (err && err.code === 'EADDRINUSE') {
+          const next = parseInt(port, 10) + 1;
+          console.warn(`⚠️ Port ${port} in use — attempting to listen on ${next}`);
+          // Try the next port once
+          startListen(next);
+        } else {
+          console.error('Server error:', err);
+          process.exit(1);
+        }
+      });
+    };
+
+    startListen(PORT);
   } catch (error) {
     console.error("🚨 Startup error:", error);
     console.error("Stack trace:", error.stack);
