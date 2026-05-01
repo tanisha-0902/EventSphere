@@ -127,9 +127,9 @@
 
         /* User Auth Status Bar - Enhanced Styling */
         .auth-status-bar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
             padding: 1.5rem 0;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25);
+            box-shadow: 0 4px 15px rgba(15, 23, 42, 0.4);
             position: relative;
             overflow: hidden;
         }
@@ -142,9 +142,9 @@
             right: 0;
             bottom: 0;
             background: linear-gradient(90deg, 
-                rgba(255,255,255,0.05) 0%, 
-                rgba(255,255,255,0.02) 50%, 
-                rgba(255,255,255,0.05) 100%);
+                rgba(255,255,255,0.08) 0%, 
+                rgba(255,255,255,0.03) 50%, 
+                rgba(255,255,255,0.08) 100%);
             pointer-events: none;
         }
 
@@ -159,7 +159,7 @@
         }
 
         .auth-status-text {
-            color: white;
+            color: #ffffff;
             font-weight: 500;
             font-size: 0.95rem;
             display: flex;
@@ -170,19 +170,20 @@
         .auth-status-text .user-icon {
             width: 36px;
             height: 36px;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.15);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.1rem;
             backdrop-filter: blur(10px);
+            color: #ffffff;
         }
 
         .auth-status-text .user-name {
             font-weight: 700;
             font-size: 1rem;
-            color: #fff;
+            color: #ffffff;
         }
 
         .auth-buttons {
@@ -206,39 +207,42 @@
         }
 
         .auth-btn-login {
-            background: rgba(255, 255, 255, 0.15);
-            color: white;
-            border: 1.5px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            border: 1.5px solid rgba(255, 255, 255, 0.25);
         }
 
         .auth-btn-login:hover {
-            background: rgba(255, 255, 255, 0.25);
-            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.22);
+            border-color: rgba(255, 255, 255, 0.45);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
 
         .auth-btn-register {
-            background: linear-gradient(135deg, #f093fb, #f5576c);
-            color: white;
+            background: #ffffff;
+            color: #1e3a5f;
+            border: none;
+            font-weight: 700;
         }
 
         .auth-btn-register:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(245, 87, 108, 0.4);
+            box-shadow: 0 8px 20px rgba(255, 255, 255, 0.4);
+            background: #f0f4f8;
         }
 
         .auth-btn-logout {
-            background: rgba(255, 87, 108, 0.2);
-            color: #ff5764;
-            border: 1.5px solid rgba(255, 87, 108, 0.4);
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            border: 1.5px solid rgba(255, 255, 255, 0.25);
         }
 
         .auth-btn-logout:hover {
-            background: rgba(255, 87, 108, 0.3);
-            border-color: rgba(255, 87, 108, 0.6);
+            background: rgba(255, 255, 255, 0.22);
+            border-color: rgba(255, 255, 255, 0.45);
             transform: translateY(-2px);
-            color: #ff5764;
+            color: #ffffff;
         }
 
         @media (max-width: 768px) {
@@ -431,28 +435,26 @@
             </script>
             <script>
                 // Registered events passed from server
-                const registeredEventIds = <%- JSON.stringify(registeredEventIds || []) %>;
+                let registeredEventIds = <%- JSON.stringify(registeredEventIds || []) %>;
 
                 function updateRegisterButtonState(btn, isRegistered) {
                     if (!btn) return;
                     if (isRegistered === 'past') {
                         btn.textContent = 'Closed';
-                        btn.classList.remove('btn-outline-success');
-                        btn.classList.remove('btn-success');
+                        btn.classList.remove('btn-outline-success', 'btn-success', 'btn-outline-danger');
                         btn.classList.add('btn-secondary');
                         btn.disabled = true;
                         return;
                     }
 
                     if (isRegistered) {
-                        btn.textContent = 'Registered';
-                        btn.classList.remove('btn-outline-success');
-                        btn.classList.add('btn-success');
-                        btn.disabled = true;
+                        btn.textContent = 'Unregister';
+                        btn.classList.remove('btn-outline-success', 'btn-success', 'btn-secondary');
+                        btn.classList.add('btn-outline-danger');
+                        btn.disabled = false;
                     } else {
                         btn.textContent = 'Register';
-                        btn.classList.remove('btn-success');
-                        btn.classList.remove('btn-secondary');
+                        btn.classList.remove('btn-success', 'btn-secondary', 'btn-outline-danger');
                         btn.classList.add('btn-outline-success');
                         btn.disabled = false;
                     }
@@ -475,15 +477,18 @@
                         btn.onclick = async (e) => {
                             e.preventDefault();
                             if (btn.disabled) return;
-                            console.log('Register button clicked for', eventId);
+                            
+                            const isRegistered = registeredEventIds.includes(eventId);
+                            const actionUrl = isRegistered ? `/events/${eventId}/unregister` : `/events/${eventId}/register`;
+                            
+                            console.log(`Button clicked for ${eventId}, action: ${isRegistered ? 'unregister' : 'register'}`);
+                            
                             try {
-                                const resp = await fetch(`/events/${eventId}/register`, {
+                                const resp = await fetch(actionUrl, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     credentials: 'same-origin'
                                 });
-
-                                console.log('Register response status:', resp.status);
 
                                 if (resp.status === 401) {
                                     window.location.href = '/user/login';
@@ -491,17 +496,21 @@
                                 }
 
                                 const data = await resp.json();
-                                console.log('Register response data:', data);
+                                console.log('Response data:', data);
 
                                 if (resp.ok && data && data.success) {
-                                    if (!registeredEventIds.includes(eventId)) registeredEventIds.push(eventId);
-                                    updateRegisterButtonState(btn, true);
+                                    if (isRegistered) {
+                                        registeredEventIds = registeredEventIds.filter(id => id !== eventId);
+                                    } else {
+                                        if (!registeredEventIds.includes(eventId)) registeredEventIds.push(eventId);
+                                    }
+                                    updateRegisterButtonState(btn, !isRegistered);
                                 } else {
-                                    alert(data.message || 'Could not register.');
+                                    alert(data.message || 'Action failed.');
                                 }
                             } catch (err) {
-                                console.error('Register request failed:', err);
-                                alert('Registration failed. Try again later.');
+                                console.error('Request failed:', err);
+                                alert('Action failed. Try again later.');
                             }
                         };
                     });

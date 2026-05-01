@@ -54,6 +54,13 @@ const redisConfig = {
   socket: {
     host: process.env.REDIS_HOST || "127.0.0.1",
     port: parseInt(process.env.REDIS_PORT || "6379"),
+    reconnectStrategy: (retries) => {
+      if (retries > 10) {
+        console.error("❌ Redis max reconnect attempts reached");
+        return new Error('Max reconnection attempts reached');
+      }
+      return retries * 100; // Retry with exponential backoff (100ms, 200ms, etc)
+    }
   },
 };
 
@@ -63,7 +70,15 @@ if (process.env.REDIS_PASSWORD && process.env.REDIS_PASSWORD.trim()) {
 
 const redisClient = createClient(redisConfig);
 
-redisClient.on("error", (err) => console.error("❌ Redis Client Error:", err));
+let redisErrorLogged = false;
+redisClient.on("error", (err) => {
+  if (err.code === 'ECONNREFUSED' && !redisErrorLogged) {
+    console.error("❌ Redis Connection Refused. Ensure Redis is running.");
+    redisErrorLogged = true;
+  } else if (err.code !== 'ECONNREFUSED') {
+    console.error("❌ Redis Client Error:", err);
+  }
+});
 redisClient.on("connect", () => console.log("✅ Connected to Redis"));
 redisClient.on("ready", () => console.log("✅ Redis is ready for use"));
 
@@ -86,31 +101,41 @@ app.use(methodOverride("_method"));
 // ========================================
 async function startServer() {
   try {
-    // 1️⃣ Connect to Redis FIRST
-    await redisClient.connect();
-    console.log("✅ Redis Cloud connected successfully");
+    // 1️⃣ Connect to Redis FIRST (with fallback)
+    let isRedisConnected = false;
+    try {
+      await redisClient.connect();
+      console.log("✅ Redis Cloud connected successfully");
+      isRedisConnected = true;
+    } catch (err) {
+      console.warn("⚠️ Failed to connect to Redis. Falling back to MemoryStore.");
+    }
 
-    // 2️⃣ Setup session middleware AFTER Redis connects
-    app.use(
-      session({
-        store: new RedisStore({
-          client: redisClient,
-          prefix: "sess:",
-        }),
-        secret: process.env.SESSION_SECRET || "event-sphere-secret-key",
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-          secure: process.env.NODE_ENV === 'production',
-          httpOnly: true,
-          maxAge: 24 * 60 * 60 * 1000,
-          sameSite: 'lax'
-        },
-        proxy: true
-      })
-    );
+    // 2️⃣ Setup session middleware
+    const sessionConfig = {
+      secret: process.env.SESSION_SECRET || "event-sphere-secret-key",
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000,
+        sameSite: 'lax'
+      },
+      proxy: true
+    };
 
-    console.log("✅ Session middleware configured with Redis");
+    if (isRedisConnected) {
+      sessionConfig.store = new RedisStore({
+        client: redisClient,
+        prefix: "sess:",
+      });
+      console.log("✅ Session middleware configured with Redis");
+    } else {
+      console.log("✅ Session middleware configured with default MemoryStore");
+    }
+
+    app.use(session(sessionConfig));
 
     // 3️⃣ Flash message middleware
     app.use((req, res, next) => {
@@ -130,10 +155,15 @@ async function startServer() {
     app.use(express.static(path.join(__dirname, "public")));
 
     // 5️⃣ Connect to MongoDB
-    await mongoClient.connect();
-    console.log("✅ Connected to MongoDB");
-    db = mongoClient.db(process.env.DB_NAME);
-    console.log("🗂️ Using Database:", db.databaseName);
+    try {
+      await mongoClient.connect();
+      console.log("✅ Connected to MongoDB");
+      db = mongoClient.db(process.env.DB_NAME);
+      console.log("🗂️ Using Database:", db.databaseName);
+    } catch (err) {
+      console.error("❌ Failed to connect to MongoDB:", err.message);
+      console.warn("⚠️ Server running without database connection. Features relying on DB will fail.");
+    }
 
     // 6️⃣ Initialize Socket.IO Server 🆕
     // Use the appropriate protocol (https or http) in the origin
@@ -371,6 +401,43 @@ async function startServer() {
       }
     });
 
+    // Unregister from an event (requires user session)
+    app.post('/events/:id/unregister', async (req, res) => {
+      try {
+        const eventId = req.params.id;
+        console.log('POST /events/:id/unregister hit for', eventId, 'sessionUser:', req.session && req.session.userId);
+        if (!req.session || !req.session.userId) {
+          return res.status(401).json({ success: false, message: 'Please log in to unregister' });
+        }
+        if (!ObjectId.isValid(eventId)) {
+          return res.status(400).json({ success: false, message: 'Invalid event id' });
+        }
+
+        // Ensure event exists and is not in the past
+        const event = await db.collection('events').findOne({ _id: new ObjectId(eventId) });
+        if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+        const eventDate = new Date(event.date);
+        if (eventDate <= new Date()) {
+          return res.status(400).json({ success: false, message: 'Cannot unregister for past events' });
+        }
+
+        const regQuery = { eventId: new ObjectId(eventId), userId: req.session.userId };
+
+        // Delete the registration
+        const result = await db.collection('registrations').deleteOne(regQuery);
+
+        // Get updated count
+        const count = await db.collection('registrations').countDocuments({ eventId: new ObjectId(eventId) });
+
+        console.log('Unregistration result:', { deletedCount: result.deletedCount, count });
+
+        res.json({ success: true, unregistered: result.deletedCount > 0, count });
+      } catch (err) {
+        console.error('Unregister error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+      }
+    });
+
     // User registration and login routes
     app.get('/user/register', (req, res) => {
       if (req.session && req.session.userId) return res.redirect('/events');
@@ -379,22 +446,22 @@ async function startServer() {
 
     app.post('/user/register', async (req, res) => {
       try {
-        const { username, password } = req.body;
-        if (!username || !password) {
-          req.session.error = 'Username and password are required';
+        const { username, email, password } = req.body;
+        if (!username || !email || !password) {
+          req.session.error = 'Username, email, and password are required';
           return res.redirect('/user/register');
         }
 
         const bcrypt = require('bcryptjs');
         const hashed = await bcrypt.hash(password, 10);
 
-        const existing = await db.collection('users').findOne({ username });
+        const existing = await db.collection('users').findOne({ $or: [{ username }, { email }] });
         if (existing) {
-          req.session.error = 'Username already taken';
+          req.session.error = 'Username or email already taken';
           return res.redirect('/user/register');
         }
 
-        const insert = await db.collection('users').insertOne({ username, password: hashed, createdAt: new Date() });
+        const insert = await db.collection('users').insertOne({ username, email, password: hashed, createdAt: new Date() });
         req.session.userId = insert.insertedId.toString();
         req.session.userName = username;
         req.session.success = 'Registered and logged in';
@@ -565,45 +632,6 @@ async function startServer() {
         res.redirect("/admin/login");
       }
     });
-    // app.post("/admin/login", async (req, res) => {
-    //   try {
-    //     const { username, password } = req.body;
-
-    //     // Find admin in DB
-    //     const admin = await db.collection('admins').findOne({ username: username });
-
-    //     // NOTE: Ensure 'bcryptjs' is installed (npm install bcryptjs) and required at the top of server.js
-    //     const bcrypt = require('bcryptjs');
-    //     let passwordMatches = false;
-
-    //     if (admin && admin.password) {
-    //       // Check for hashed password format
-    //       if (admin.password.startsWith('$2')) {
-    //         passwordMatches = await bcrypt.compare(password, admin.password);
-    //       } else {
-    //         // Fallback for non-hashed (simple) password
-    //         passwordMatches = admin.password === password;
-    //       }
-    //     }
-
-    //     if (admin && passwordMatches) {
-    //       req.session.isAdmin = true;
-    //       req.session.adminId = admin._id.toString();
-    //       req.session.adminUsername = admin.username;
-    //       req.session.success = "Logged in successfully!";
-    //       res.redirect("/admin");
-    //     } else {
-    //       req.session.error = "Invalid username or password.";
-    //       res.redirect("/admin/login");
-    //     }
-    //   } catch (error) {
-    //     console.error("Login error:", error);
-    //     req.session.error = "An error occurred during login.";
-    //     res.redirect("/admin/login");
-    //   }
-    // });
-
-    // 3. GET /admin - Admin Dashboard (Requires Authentication)
     // 3. GET /admin - Admin Dashboard (Requires Authentication)
     app.get("/admin", requireAuth, async (req, res) => {
       try {
@@ -613,18 +641,22 @@ async function startServer() {
         // 🆕 Fetch all contact submissions
         const contactSubmissions = await db.collection("contacts").find().sort({ timestamp: -1 }).toArray();
 
-        // Fetch registration counts per event
-        let registrationCounts = {};
+        // Fetch all registrations grouped by event
+        let eventRegistrations = {};
         try {
-          const agg = await db.collection('registrations').aggregate([
-            { $group: { _id: '$eventId', count: { $sum: 1 } } }
-          ]).toArray();
-
-          agg.forEach(a => {
-            if (a._id) registrationCounts[a._id.toString()] = a.count;
+          const regs = await db.collection('registrations').find().toArray();
+          regs.forEach(r => {
+            if (r.eventId) {
+              const eId = r.eventId.toString();
+              if (!eventRegistrations[eId]) eventRegistrations[eId] = [];
+              eventRegistrations[eId].push({
+                userId: r.userId,
+                userName: r.userName || 'Unknown User'
+              });
+            }
           });
         } catch (e) {
-          console.warn('Could not compute registration counts:', e.message || e);
+          console.warn('Could not compute event registrations:', e.message || e);
         }
 
         res.render("admin/dashboard", {
@@ -632,13 +664,65 @@ async function startServer() {
           events,
           // 🆕 Pass contactSubmissions to the template
           contactSubmissions,
-          registrationCounts
+          eventRegistrations
         });
       } catch (error) {
         console.error("Dashboard error:", error);
         req.session.error = "Failed to load dashboard data.";
         res.redirect("/admin/login");
       }
+    });
+
+    // GET /admin/cache-stats
+    app.get("/admin/cache-stats", requireAuth, async (req, res) => {
+      try {
+        let eventKeys = [];
+        let sessionKeys = [];
+        let otherKeys = [];
+        let totalKeys = 0;
+        
+        try {
+          const allKeys = await redisClient.keys('*');
+          totalKeys = allKeys.length;
+          allKeys.forEach(k => {
+            if (k.startsWith('events:')) eventKeys.push(k);
+            else if (k.startsWith('sess:')) sessionKeys.push(k);
+            else otherKeys.push(k);
+          });
+        } catch (e) {
+          console.warn('Could not fetch redis keys:', e);
+        }
+
+        res.render("admin/cache-stats", {
+          title: "Cache Statistics - Admin",
+          stats: cacheStats,
+          hitRate: cacheStats.getHitRate(),
+          totalKeys,
+          eventKeys,
+          sessionKeys,
+          otherKeys,
+          success: req.session.success,
+          error: req.session.error
+        });
+        delete req.session.success;
+        delete req.session.error;
+      } catch (error) {
+        console.error("Cache stats error:", error);
+        req.session.error = "Failed to load cache statistics.";
+        res.redirect("/admin");
+      }
+    });
+
+    // POST /admin/cache-clear
+    app.post("/admin/cache-clear", requireAuth, async (req, res) => {
+      try {
+        await invalidateCache('events:*');
+        req.session.success = "Event cache cleared successfully!";
+      } catch (error) {
+        console.error("Cache clear error:", error);
+        req.session.error = "Failed to clear cache.";
+      }
+      res.redirect("/admin/cache-stats");
     });
 
     // 4. GET /admin/logout
@@ -764,64 +848,7 @@ async function startServer() {
 
     // ... remaining routes and handlers ...
     // ===============================
-    app.get("/admin/cache-stats", async (req, res) => {
-      try {
-        if (!req.session.isAdmin) {
-          return res.redirect("/admin/login");
-        }
 
-        // Get Redis info
-        const redisInfoRaw = await redisClient.info();
-        const redisKeys = await redisClient.dbSize();
-
-        // Format raw Redis INFO into an object
-        const redisInfo = {};
-        redisInfoRaw.split("\n").forEach(line => {
-          if (line.includes(":")) {
-            const [key, value] = line.split(":");
-            redisInfo[key.trim()] = value.trim();
-          }
-        });
-
-        // Get all keys and filter by pattern
-        const allKeys = await redisClient.keys('*');
-        const eventKeys = allKeys.filter(key => key.startsWith('events:'));
-        const sessionKeys = allKeys.filter(key => key.startsWith('sess:'));
-        const otherKeys = allKeys.filter(key => !key.startsWith('events:') && !key.startsWith('sess:'));
-
-        // Calculate hit rate
-        const hits = parseInt(redisInfo.keyspace_hits) || 0;
-        const misses = parseInt(redisInfo.keyspace_misses) || 0;
-        const total = hits + misses;
-        const hitRate = total > 0 ? ((hits / total) * 100).toFixed(2) : 0;
-
-        // Build stats object from Redis info
-        const stats = {
-          totalRequests: redisInfo.total_commands_processed || 0,
-          connectedClients: redisInfo.connected_clients || 0,
-          totalConnections: redisInfo.total_connections_received || 0,
-          usedMemoryHuman: redisInfo.used_memory_human || "0MB",
-          hits: hits,
-          misses: misses
-        };
-
-        res.render("admin/cache-stats", {
-          title: "Cache Statistics - Admin Panel",
-          redisInfo,
-          redisKeys,
-          stats,
-          hitRate,
-          totalKeys: redisKeys,
-          eventKeys,
-          sessionKeys,
-          otherKeys        // ← ADD THIS!
-        });
-
-      } catch (err) {
-        console.error("❌ Error loading cache stats:", err);
-        res.status(500).send("Error loading cache stats");
-      }
-    });
 
 
     // 404 HANDLER

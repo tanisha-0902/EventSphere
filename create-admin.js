@@ -5,8 +5,8 @@ const MONGO = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 const DB_NAME = process.env.DB_NAME || 'eventsphere';
 
 const admin = {
-  username: 'anshu',
-  password: 'anshu123',
+  username: 'tanisha',
+  password: 'tanisha123',
 };
 
 async function run() {

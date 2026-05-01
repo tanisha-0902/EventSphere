@@ -31,9 +31,10 @@ Event organizers are empowered with comprehensive tools to create, update, and m
   - Organizers can create, edit, or delete events
   - Users can browse upcoming events and view details
 
-- **📅 Event Registration**
-  - Users can register for events online
-  - Receive confirmation emails and QR code tickets
+- **📅 Event Registration & Tracking**
+  - Users can seamlessly register and unregister for upcoming events.
+  - Comprehensive Admin Dashboard for tracking total registrations and viewing registrant lists per event.
+  - Protections against registering for past events.
 
 - **🔔 Notifications**
   - WebSocket-based live updates
@@ -64,36 +65,30 @@ Event organizers are empowered with comprehensive tools to create, update, and m
 | **Deployment** | <a href="https://your-beanstalk-url.com"><img src="https://img.shields.io/badge/AWS_Elastic_Beanstalk-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" /></a> <a href="https://your-render-url.com"><img src="https://img.shields.io/badge/Render-46E3B7?style=for-the-badge&logo=render&logoColor=white" /></a>  |
 ---
 
-## 📁 Directory Structure
+## 🏗️ System Architecture
+
+```mermaid
+graph TD
+    Client[Client Browser] -->|HTTP/HTTPS| Express[Express Server]
+    Client <-->|WebSockets| SocketIO[Socket.IO Server]
+    Express -->|Read/Write| MongoDB[(MongoDB Atlas)]
+    Express <-->|Session/Cache| Redis[(Redis Cache)]
+    SocketIO -->|Real-time Updates| Client
 ```
+
+## 📁 Directory Structure
+```text
 EventSphere/
-├── backend/
-│ ├── controllers/
-│ │ ├── authController.js
-│ │ ├── eventController.js
-│ │ └── registrationController.js
-│ ├── models/
-│ │ ├── User.js
-│ │ ├── Event.js
-│ │ └── Registration.js
-│ ├── routes/
-│ │ ├── authRoutes.js
-│ │ ├── eventRoutes.js
-│ │ └── registrationRoutes.js
-│ ├── middleware/
-│ │ └── authMiddleware.js
-│ └── server.js
-├── frontend/
-│ ├── public/
-│ ├── views/
-│ │ ├── partials/
-│ │ ├── index.ejs
-│ │ ├── login.ejs
-│ │ ├── register.ejs
-│ │ └── events.ejs
-├── .gitignore
-├── package.json
-└── README.md
+├── docs/              # Project Documentation & Architecture Guides
+├── public/            # Static assets (CSS, images, client-side JS)
+├── views/             # EJS templates for SSR (index, events, admin dashboard)
+├── middleware/        # Custom Express middleware
+├── __test__/          # Jest unit & integration tests
+├── cypress/           # Cypress E2E tests
+├── server.js          # Main Application Entry Point & Route Handlers
+├── create-admin.js    # Database seeding script for admin credentials
+├── package.json       # Project dependencies & scripts
+└── .env               # Environment configuration
 ```
 
 ---
