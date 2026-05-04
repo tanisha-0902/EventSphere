@@ -101,7 +101,7 @@ app.use(methodOverride("_method"));
 // ========================================
 async function initializeDefaultAdmin(database) {
   const bcrypt = require('bcryptjs');
-  const admins = database.collection('admins');
+  const admins = database.collection('admin');
 
   // Check if any admin exists
   const adminCount = await admins.countDocuments();
@@ -300,7 +300,7 @@ async function startServer() {
           return res.status(400).json({ success: false, message: 'Username and password required' });
         }
 
-        const admin = await db.collection('admins').findOne({ username: username });
+        const admin = await db.collection('admin').findOne({ username: username });
 
         if (!admin) {
           return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -637,7 +637,7 @@ async function startServer() {
         console.log("🔍 LOGIN ATTEMPT - Username:", username); // DEBUG
         console.log("🔍 LOGIN ATTEMPT - Password:", password); // DEBUG
 
-        const admin = await db.collection('admins').findOne({ username: username });
+        const admin = await db.collection('admin').findOne({ username: username });
 
         console.log("📋 Admin found:", admin ? "YES" : "NO"); // DEBUG
         if (admin) {

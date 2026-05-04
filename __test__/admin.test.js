@@ -9,8 +9,8 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // CONFIGURATION - CHANGE THESE VALUES
 // ============================================
 const CONFIG = {
-    BASE_URL: 'http://localhost:3000',
-    ADMIN_LOGIN_URL: 'http://localhost:3000/admin/login',
+    BASE_URL: 'https://eventsphere-1-2kl3.onrender.com',
+    ADMIN_LOGIN_URL: 'https://eventsphere-1-2kl3.onrender.com/admin/login',
     // Update these to the admin credentials you want to test
     ADMIN_USERNAME: 'tanisha',
     ADMIN_PASSWORD: 'tanisha123',
