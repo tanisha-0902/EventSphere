@@ -97,6 +97,45 @@ app.use(bodyParser.json());
 app.use(methodOverride("_method"));
 
 // ========================================
+// 🆕 INITIALIZE DEFAULT ADMIN USER
+// ========================================
+async function initializeDefaultAdmin(database) {
+  const bcrypt = require('bcryptjs');
+  const admins = database.collection('admins');
+
+  // Check if any admin exists
+  const adminCount = await admins.countDocuments();
+  if (adminCount > 0) {
+    console.log("✅ Admin user(s) already exist in database");
+    return;
+  }
+
+  // Create default admin if none exists
+  const defaultAdmin = {
+    username: process.env.ADMIN_USERNAME || 'admin',
+    password: process.env.ADMIN_PASSWORD || 'admin123',
+    createdAt: new Date(),
+    createdBy: 'system-initialization'
+  };
+
+  // Hash password with bcrypt if password is not already hashed
+  if (!defaultAdmin.password.startsWith('$2')) {
+    defaultAdmin.password = await bcrypt.hash(defaultAdmin.password, 10);
+  }
+
+  try {
+    const result = await admins.insertOne(defaultAdmin);
+    console.log(`✅ Default admin user created successfully`);
+    console.log(`   Username: ${process.env.ADMIN_USERNAME || 'admin'}`);
+    console.log(`   Password: Set from environment or default 'admin123'`);
+    console.log(`   ⚠️  IMPORTANT: Change this password immediately in production!`);
+  } catch (err) {
+    console.error("❌ Failed to create default admin user:", err.message);
+    throw err;
+  }
+}
+
+// ========================================
 // 🚀 SERVER STARTUP
 // ========================================
 async function startServer() {
@@ -160,6 +199,13 @@ async function startServer() {
       console.log("✅ Connected to MongoDB");
       db = mongoClient.db(process.env.DB_NAME);
       console.log("🗂️ Using Database:", db.databaseName);
+
+      // 🆕 Initialize admin user if it doesn't exist
+      try {
+        await initializeDefaultAdmin(db);
+      } catch (initErr) {
+        console.error("⚠️ Failed to initialize admin user:", initErr.message);
+      }
     } catch (err) {
       console.error("❌ Failed to connect to MongoDB:", err.message);
       console.warn("⚠️ Server running without database connection. Features relying on DB will fail.");
