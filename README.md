@@ -105,7 +105,7 @@ EventSphere/
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/Anmol_283/EventSphere
+   https://github.com/tanisha-0902/EventSphere.git
    cd EventSphere
 2. **Install Dependencies:**:
    ```bash
